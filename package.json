@@ -1,6 +1,13 @@
 {
   "name": "ogr-conv",
   "version": "0.0.0",
+  "engines": {
+    "node": "0.10.x",
+    "npm": "1.1.x"
+  },
+  "dependencies": {
+    "express": "3.0.x"
+  },
   "description": "ERROR: No README.md file found!",
   "main": "index.js",
   "scripts": {

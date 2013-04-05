@@ -10,6 +10,10 @@ var server = http.createServer(app);
 
 app.use(express.logger());
 
+app.get('/', function (req, res) {
+  res.send('Live');
+});
+
 app.get('/ogr2ogr', function (req, res) {
   exec('ogr2ogr --help',
     function (error, stdout, stderr) {

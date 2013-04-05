@@ -6,7 +6,8 @@
     "npm": "1.1.x"
   },
   "dependencies": {
-    "express": "3.0.x"
+    "express": "3.0.x",
+    "zipstream": "0.2.x"
   },
   "description": "ERROR: No README.md file found!",
   "main": "index.js",

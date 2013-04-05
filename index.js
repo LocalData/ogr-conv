@@ -71,6 +71,10 @@ function postGeoJSON2Shapefile(req, res) {
   // Save the GeoJSON input to a temporary file.
   qfs.write(geoJSONFile, req.body)
   .then(function () {
+    // Make the temporary directory
+    return qfs.makeDirectory(outdir);
+  })
+  .then(function () {
     // Run the ogr2ogr command
     return exec('LD_LIBRARY_PATH=/app/vendor/gdal/lib GDAL_DATA=/app/vendor/gdal/share/gdal /app/vendor/gdal/bin/ogr2ogr -f "ESRI Shapefile" ' + outdir + '/' + outname + '.shp ' + geoJSONFile);
   })

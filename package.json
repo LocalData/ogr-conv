@@ -7,13 +7,13 @@
   },
   "dependencies": {
     "express": "3.0.x",
+    "node-uuid": "1.4.x",
+    "q": "0.9.x",
+    "q-io": "1.6.x",
     "zipstream": "0.2.x"
   },
-  "description": "ERROR: No README.md file found!",
+  "description": "Convert GeoJSON data to ESRI Shapefile format",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": "",
   "author": "",
   "license": "BSD"

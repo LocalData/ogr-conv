@@ -11,7 +11,7 @@ var server = http.createServer(app);
 app.use(express.logger());
 
 app.get('/ogr2ogr', function (req, res) {
-  exec('cat *.js bad_file | wc -l',
+  exec('ogr2ogr --help',
     function (error, stdout, stderr) {
       if (error) {
         res.send(500);

@@ -95,8 +95,8 @@ function postGeoJSON2Shapefile(req, res) {
     // Add files to the zip stream.
 
     // Make functions that each add a file to the zip stream and return a promise.
-    var adders = files.map(function () {
-      return function add(name) {
+    var adders = files.map(function (name) {
+      return function add() {
         var deferred = Q.defer();
         zip.addFile(fs.createReadStream(outdir + '/' + name), { name : name }, function () {
           deferred.resolve();

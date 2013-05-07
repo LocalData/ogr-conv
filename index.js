@@ -11,12 +11,32 @@ var uuid = require('node-uuid');
 var Q = require('q');
 var qfs = require('q-io/fs');
 
+// If we write a ZIP file larger than this, issue a warning.
+var LARGE_WARN = 20*1024*1024;
+
 var app = express();
 var server = http.createServer(app);
 
 app.use(express.logger());
 
-var TMPDIR = 'tmp';
+// Specify the execution environment: 'heroku' or 'local'
+var environment = process.env.ENVIRONMENT;
+
+var TMPDIR;
+var OGRCMD;
+
+if (environment === 'heroku') {
+  TMPDIR = 'tmp';
+  OGRCMD = 'LD_LIBRARY_PATH=/app/vendor/gdal/lib GDAL_DATA=/app/vendor/gdal/share/gdal /app/vendor/gdal/bin/ogr2ogr -f "ESRI Shapefile" ';
+} else if (environment === 'local') {
+  TMPDIR = '/tmp';
+  OGRCMD = 'ogr2ogr -f "ESRI Shapefile" ';
+} else {
+  throw {
+    name: 'InvalidEnvironmentError',
+    message: 'You must specify a valid value for the ENVIRONMENT'
+  };
+}
 
 function bufferPostData(req, res, next) {
   var buf = '';
@@ -70,7 +90,7 @@ function convert(geoJSONFile) {
   return qfs.makeDirectory(outdir)
   .then(function () {
     // Run the ogr2ogr command
-    return exec('LD_LIBRARY_PATH=/app/vendor/gdal/lib GDAL_DATA=/app/vendor/gdal/share/gdal /app/vendor/gdal/bin/ogr2ogr -f "ESRI Shapefile" ' + outdir + '/' + outname + '.shp ' + geoJSONFile);
+    return exec(OGRCMD + outdir + '/' + outname + '.shp ' + geoJSONFile);
   })
   .then(function (outputs) {
     // Gather the names of the files created by ogr2ogr.
@@ -97,7 +117,10 @@ function convert(geoJSONFile) {
     // Finalize the zip stream.
     Q.ninvoke(zip, 'finalize')
     .then(function (count) {
-      console.log('Wrote ' + count + ' to the ZIP archive.');
+      if (count > LARGE_WARN) {
+        console.log('WARNING: Large file');
+      }
+      console.log('Wrote ' + count + ' bytes to the ZIP archive.');
       // Remove temporary directory
       return qfs.removeTree(outdir);
     })

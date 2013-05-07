@@ -1,1 +1,3 @@
 node_modules
+herokuconfig*
+local.env

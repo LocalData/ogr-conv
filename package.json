@@ -2,15 +2,15 @@
   "name": "ogr-conv",
   "version": "0.0.0",
   "engines": {
-    "node": "0.8.x",
-    "npm": "1.1.x"
+    "node": "0.10.x",
+    "npm": "1.2.x"
   },
   "dependencies": {
     "express": "3.0.x",
     "node-uuid": "1.4.x",
     "q": "0.9.x",
     "q-io": "1.6.x",
-    "zipstream": "0.2.x"
+    "archiver": "0.4.3"
   },
   "description": "Convert GeoJSON data to ESRI Shapefile format",
   "main": "index.js",

@@ -10,6 +10,8 @@ var archiver = require('archiver');
 var uuid = require('node-uuid');
 var Q = require('q');
 var qfs = require('q-io/fs');
+var knox = require('knox');
+var request = require('request');
 
 // If we write a ZIP file larger than this, issue a warning.
 var LARGE_WARN = 20*1024*1024;
@@ -37,6 +39,18 @@ if (environment === 'heroku') {
     message: 'You must specify a valid value for the ENVIRONMENT'
   };
 }
+
+// S3 upload configuration
+var bucket = process.env.S3_BUCKET;
+var uploadDir = process.env.S3_UPLOAD_DIR;
+var uploadPrefix = 'http://' + bucket + '.s3.amazonaws.com/';
+
+var client = knox.createClient({
+  key: process.env.S3_KEY,
+  secret: process.env.S3_SECRET,
+  bucket: bucket
+});
+
 
 function bufferPostData(req, res, next) {
   var buf = '';
@@ -131,7 +145,8 @@ function convert(geoJSONFile) {
     .fail(function (error) {
       console.log(error);
       throw error;
-    });
+    })
+    .done();
 
     // Return a promise for the ZIP stream.
     return zip;
@@ -162,23 +177,68 @@ function postGeoJSON2Shapefile(req, res) {
     console.log(error);
     res.send(500);
     throw error;
-  });
+  })
+  .done();
 }
 
+// Instead of receiving GeoJSON to convert, we go and fetch it. We tell the
+// client where we will stash the created Shapefile archive.
 function handleControlInversion(req, res) {
+  console.log(req.body); // XXX
   var url = req.body.url;
+  var id = uuid.v1();
+
+  var geoJSONFile = TMPDIR + '/' + id + '.json';
+  var outdir = TMPDIR + '/' + id;
+  var outname = 'output';
+  var zipFile = TMPDIR + '/' + id + '_' + outname + '.zip';
+
+  if (req.params.basename !== undefined) {
+    outname = req.params.basename;
+  }
+
 
   // Determine S3 path
-  // XXX
+  var s3Object = uploadDir + '/' + id + '/' + outname + '.zip';
+  var s3Path = uploadPrefix + s3Object;
+
   // Send S3 path to client
-  // XXX
-  // Fetch GeoJSON data
-  // XXX
-  // Convert to shapefile
-  // XXX
-  // Store on S3
-  // XXX
- res.send(501);
+  // We send a 202 Accepted because we have not yet created the file, but we
+  // have graciously agreed to try.
+  res.send(202, {
+    url: s3Path
+  });
+
+  // Fetch GeoJSON data and save to a temporary file.
+  var geoJSONFileStream = request(url).pipe(fs.createWriteStream(geoJSONFile));
+
+  Q.ninvoke(geoJSONFileStream, 'on', 'finish')
+  .then(function () {
+    // Convert to shapefile
+    // This gives us a promise for the zip stream.
+    return convert(geoJSONFile);
+  })
+  .then(function (zip) {
+    // Write the ZIP file to disk temporarily, since we need the content length
+    // for S3.
+    var zipFileStream = zip.pipe(fs.createWriteStream(zipFile));
+    return Q.ninvoke(zipFileStream, 'on', 'finish');
+  })
+  .then(function () {
+    // Store on S3
+    return Q.ninvoke(client, 'putFile', zipFile, s3Object);
+  })
+  .then(function () {
+    console.log('Saved ZIP file to ' + s3Path);
+
+    // Clean up the temporary ZIP file.
+    return qfs.remove(zipFile);
+  })
+  .fail(function (error) {
+    console.log(error);
+    throw error;
+  })
+  .done();
 }
 
 app.post('/geojson2shp', bufferPostData, postGeoJSON2Shapefile);

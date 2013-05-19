@@ -181,10 +181,100 @@ function postGeoJSON2Shapefile(req, res) {
   .done();
 }
 
+// Fetch the responses in chunks, process, write to a stream.
+// TODO: implement this as a readable stream, so we can just pipe the data?
+function fetch(baseUrl, stream) {
+  var first = true;
+
+  function transform(features) {
+    var prefix;
+    if (first) {
+      prefix = '{"type": "FeatureCollection", "features": [';
+      first = false;
+    } else {
+      prefix = ',';
+    }
+    var i;
+    var len = features.length;
+    var feature;
+    for (i = 0; i < len; i += 1) {
+      feature = features[i];
+
+      // Adjust the feature
+      var responses = feature.properties.responses;
+      var key;
+      var newKey;
+      for (key in responses) {
+        if (responses.hasOwnProperty(key)) {
+          newKey = 'r.' + key;
+          feature.properties[newKey] = responses[key];
+        }
+      }
+      delete feature.properties.responses;
+
+      if (i === 0) {
+        stream.write(prefix + JSON.stringify(feature));
+      } else {
+        stream.write(',' + JSON.stringify(feature));
+      }
+    }
+  }
+
+  function getChunk(start) {
+    var COUNT = 5000;
+    request({
+      url: baseUrl,
+      qs: {
+        startIndex: start,
+        count: COUNT
+      }
+    }, function (error, response, body) {
+      if (error) {
+        console.log(error);
+        return stream.emit('error', error);
+      }
+      
+      if (response.statusCode !== 200) {
+        console.log(body);
+        return stream.emit('error', {
+          name: 'RequestError',
+          message: 'Received an error response from the API.'
+        });
+      }
+
+      var data;
+      try {
+        data = JSON.parse(body);
+      } catch (e) {
+        console.log('Error parsing JSON data.');
+        console.log(e);
+        return stream.emit('error', e);
+      }
+
+      // If we got back as many responses as we asked for, then we fetch another
+      // chunk of data.
+      console.log('Fetched ' + data.features.length + ' features.');
+      var features = data.features;
+      var len = features.length;
+      if (len === COUNT) {
+        getChunk(start + COUNT);
+        transform(features);
+      } else {
+        if (len > 0) {
+          transform(features);
+        }
+        stream.write(']}');
+        stream.end();
+      }
+    });
+  }
+
+  getChunk(0);
+}
+
 // Instead of receiving GeoJSON to convert, we go and fetch it. We tell the
 // client where we will stash the created Shapefile archive.
 function handleControlInversion(req, res) {
-  console.log(req.body); // XXX
   var url = req.body.url;
   var id = uuid.v1();
 
@@ -197,6 +287,7 @@ function handleControlInversion(req, res) {
     outname = req.params.basename;
   }
 
+  console.log('Getting GeoJSON data from base URL ' + url);
 
   // Determine S3 path
   var s3Object = uploadDir + '/' + id + '/' + outname + '.zip';
@@ -209,10 +300,21 @@ function handleControlInversion(req, res) {
     url: s3Path
   });
 
-  // Fetch GeoJSON data and save to a temporary file.
-  var geoJSONFileStream = request(url).pipe(fs.createWriteStream(geoJSONFile));
+  // Fetch GeoJSON data in chunks, process, and save to a temporary file.
+  var geoJSONFileStream = fs.createWriteStream(geoJSONFile);
+  fetch(url, geoJSONFileStream);
 
-  Q.ninvoke(geoJSONFileStream, 'on', 'finish')
+  var deferred = Q.defer();
+
+  geoJSONFileStream
+  .on('finish', function () {
+    deferred.resolve();
+  })
+  .on('error', function (error) {
+    deferred.reject(error);
+  });
+
+  deferred.promise
   .then(function () {
     // Convert to shapefile
     // This gives us a promise for the zip stream.

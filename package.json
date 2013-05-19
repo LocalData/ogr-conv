@@ -15,8 +15,12 @@
     "knox": "0.8.0"
     
   },
+  "devDependencies": {
+    "mocha": "1.9.x",
+    "should": "1.2.x"
+  },
   "description": "Convert GeoJSON data to ESRI Shapefile format",
-  "main": "index.js",
+  "main": "lib/index.js",
   "repository": "",
   "author": "",
   "license": "BSD"
